@@ -21,6 +21,12 @@
 		// Default Values
 		var defaults = {  
 			fadeSpeed: 250,
+			customTextValidation: undefined,
+			customEmailValidation: undefined,
+			customIntValidation: undefined,
+			customPhoneValidation: undefined,
+			customZipValidation: undefined,
+			customSubmit: undefined
 		};  
 		var options = $.extend(defaults, options);  
 		var isEmail_re = /^\s*[\w\-\+_]+(\.[\w\-\+_]+)*\@[\w\-\+_]+\.[\w\-\+_]+(\.[\w\-\+_]+)*\s*$/;
@@ -29,6 +35,10 @@
 		var isZip_re = /\b\d{5}\b/;
 		var arrowHeight, arrowWidth, errorMessage;
 		var collection = ".requiredText,.emailAddress,.int,.phone,.zip";
+		
+		var formCustomSubmitPending = false;
+		var emailCustomValidationPending = false;
+		var emailCustomValidationResult = false;
 
 		return this.each(function() {  
 			$(this).find(collection).each(function(){				   
@@ -67,12 +77,22 @@
 			});
 			
 			// Prevent form submission if invalid inputs exist
+			//TODO Fix Behaviour to support ajax requests
 			$(this).submit(function(event){
-				$(this).find(collection).each(function(){
-					if (handlePopUp(validateInput($(this)),$(this))){
-						event.preventDefault();				 
+			  var submitForm = true;
+				$(this).children(collection).each(function(){
+					if (handlePopUp(validateInput($(this)),$(this))){ 
+						submitForm = false;
 					}
 				});
+				// if(submitForm && options.customSubmit){ //commented until async behaviour fixed
+				// now rely on customSubmit implementation
+				if(options.customSubmit){
+				  runCustomSubmitFunction(options.customSubmit,this);
+				  return false;
+				} else {
+				  return submitForm;
+				}
 			});
 		});
 		
@@ -88,6 +108,10 @@
 			} else {
 				if ($(obj).hasClass("emailAddress")){ // validate for a valid email address
 					isValid = regexCheck(inputValue,isEmail_re);
+					if (options.customEmailValidation && isValid){
+					  runCustomCheckFunction(options.customEmailValidation,obj);
+					  isValid = (emailCustomValidationPending)? false:emailCustomValidationResult ;
+					}
 				} else if ($(obj).hasClass("int")){ 
 					isValid = regexCheck(inputValue,isInt_re);
 				} else if (($(obj).hasClass("phone"))){
@@ -110,6 +134,29 @@
 		}	
 		
 		function regexCheck(value, re) { return String(value).search (re) != -1;}
+		
+		function runCustomCheckFunction(func,obj) {
+		  //TODO generalize to custom fields validation not just email
+	    emailCustomValidationPending = true;
+		  emailCustomValidationResult = false;
+		  var customValidationHandler = function(validationResult){
+		    emailCustomValidationPending = false;
+		    emailCustomValidationResult = validationResult;
+		    handlePopUp(emailCustomValidationResult,obj);
+		  };
+		  func(customValidationHandler);
+	  }
+	  
+	  function runCustomSubmitFunction(func,form){
+	    formCustomSubmitPending = true;
+	    var customSubmitHandler = function(submitResult){
+	      formCustomSubmitPending = false;
+	      $(form).submit(function(e){
+	        return submitResult;
+	      });
+	    };
+	    func(customSubmitHandler);
+	  }
 	};  
 })(jQuery);  
 
